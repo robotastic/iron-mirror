@@ -40,6 +40,10 @@ function Mirror(assets, options) {
     // Minify
     if (!('minify' in options)) options.minify = Mirror.defaults.minify;
 
+		// Secure
+		if (!('secure' in options)) options.secure = Mirror.defaults.secure;
+		
+
     // Setup header fields
     if (!options.headers) options.headers = {};
     if (!('Content-Type' in options.headers)) {
@@ -63,7 +67,8 @@ Mirror.prototype.__proto__ = Array.prototype;
 Mirror.defaults = {
     maxAge: env === 'production' ? 1209600 : 0,
     separator: '\n',
-    minify: env === 'production'
+    minify: env === 'production',
+    secure: false
 };
 
 Mirror.headers = {
@@ -98,16 +103,34 @@ Mirror.prototype.call = function(_, req, res, next) {
     return this.handler(req, res, next);
 };
 
+Mirror.prototype.loggedIn = function(req)
+{
+	if (_.isUndefined(req.session) ||
+			_.isUndefined(req.session.user) ||
+			_.isUndefined(req.session.user.authenticated) || !req.session.user.authenticated)
+	{
+		return false;
+	}
+	
+	return true;
+},
 Mirror.prototype.handler = function(req, res, next) {
-    this.content(function(err, data) {
-        if (err) return next(err);
-
-        if (Mirror.processors[this.options.type]) {
-            data = Mirror.processors[this.options.type](data, this.options);
-        }
-
-        res.send(data, this.options.headers);
-    }.bind(this), req, res);
+		if (this.options.secure && !this.loggedIn(req))
+		{
+			
+			next(new Error('Unauthorized'));
+		}
+		else {
+	    this.content(function(err, data) {
+	        if (err) return next(err);
+	
+	        if (Mirror.processors[this.options.type]) {
+	            data = Mirror.processors[this.options.type](data, this.options);
+	        }
+	
+	        res.send(data, this.options.headers);
+	    }.bind(this), req, res);
+    }
 };
 
 function filename(obj) {
